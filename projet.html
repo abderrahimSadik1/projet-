@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simplex Method</title>
+<style>
+    table, th, td {
+        border: 1px solid black;
+        border-collapse: collapse;
+        padding: 5px;
+        text-align: center;
+    }
+    .pivot {
+        background-color: #ffff00;
+    }
+</style>
+</head>
+<body>
+
+<h2>Simplex Method</h2>
+<div id="inputForm">
+    <label for="numVariables">Number of Variables:</label>
+    <input type="number" id="numVariables"><br>
+    <label for="numConstraints">Number of Constraints:</label>
+    <input type="number" id="numConstraints"><br>
+    <button onclick="initializeTableau()">Initialize Tableau</button>
+</div>
+
+<div id="tableauContainer" style="display:none;">
+    <h3 id="variableTitle">Variables:</h3>
+    <p id="variableInfo"></p>
+    <h3>Original Tableau:</h3>
+    <table id="tableau"></table>
+</div>
+
+<div id="steps" style="display:none;">
+    <h3>Steps:</h3>
+    <ol id="stepList"></ol>
+</div>
+
+<div id="solution" style="display:none;">
+    <h3>Solution:</h3>
+    <p id="solutionMessage"></p>
+</div>
+
+<script>
+    const MAX_CONSTRAINTS = 10;
+    const MAX_VARIABLES = 10;
+    
+    function initializeTableau() {
+        const numVariables = parseInt(document.getElementById("numVariables").value);
+        const numConstraints = parseInt(document.getElementById("numConstraints").value);
+
+        let tableau = [];
+        for (let i = 0; i < numConstraints + 2; i++) {
+            tableau.push(new Array(numVariables + numConstraints + 3).fill(0));
+        }
+
+        for (let i = 1; i <= numVariables; i++) {
+            const coeObjectiveFunc = parseFloat(prompt(Enter the coefficient of x${i} in the objective function:));
+            tableau[numConstraints + 1][i] = -coeObjectiveFunc;
+        }
+
+        for (let i = 1; i <= numConstraints; i++) {
+            for (let j = 1; j <= numVariables; j++) {
+                const coeConstraintFunc = parseFloat(prompt(Enter the coefficient of x${j} in constraint ${i}:));
+                tableau[i][j] = coeConstraintFunc;
+            }
+        }
+
+        for (let i = 1; i <= numConstraints; i++) {
+            tableau[i][numVariables + i] = 1;
+            const RHS = parseFloat(prompt(Enter the RHS of constraint ${i}:));
+            tableau[i][numVariables + numConstraints + 2] = RHS;
+        }
+        tableau[numConstraints + 1][numVariables + numConstraints + 1] = 1;
+
+        displayTableau(tableau, numVariables, numConstraints);
+        performSimplex(tableau, numVariables, numConstraints);
+    }
+
+    function displayTableau(tableau, numVariables, numConstraints) {
+        const table = document.getElementById("tableau");
+        table.innerHTML = "";
+
+        const variableTitle = document.getElementById("variableTitle");
+        variableTitle.textContent = "Variables:";
+
+        const variableInfo = document.getElementById("variableInfo");
+        variableInfo.innerHTML = "";
+
+        const basicVariables = [];
+        const nonBasicVariables = [];
+        for (let i = 1; i <= numVariables; i++) {
+            nonBasicVariables.push(x${i});
+        }
+        for (let i = 1; i <= numConstraints; i++) {
+            basicVariables.push(s${i});
+        }
+        variableInfo.textContent = Basic Variables (VB): ${basicVariables.join(", ")};
+        variableInfo.textContent += \nNon-Basic Variables (VHB): ${nonBasicVariables.join(", ")};
+
+        const thead = document.createElement("thead");
+        const tr = document.createElement("tr");
+
+        for (let i = 1; i <= numVariables; i++) {
+            const th = document.createElement("th");
+            th.textContent = x${i};
+            tr.appendChild(th);
+        }
+
+        for (let i = 1; i <= numConstraints; i++) {
+            const th = document.createElement("th");
+            th.textContent = s${i};
+            tr.appendChild(th);
+        }
+
+        const thVE = document.createElement("th");
+        thVE.textContent = "ve";
+        tr.appendChild(thVE);
+
+        const thZ = document.createElement("th");
+        thZ.textContent = "z";
+        tr.appendChild(thZ);
+
+        const thRHS = document.createElement("th");
+        thRHS.textContent = "RHS";
+        tr.appendChild(thRHS);
+
+        thead.appendChild(tr);
+        table.appendChild(thead);
+
+        for (let i = 1; i <= numConstraints + 1; i++) {
+            const tr = document.createElement("tr");
+            for (let j = 1; j <= numConstraints + numVariables + 2; j++) {
+                const td = document.createElement("td");
+                if(j <= numVariables){
+                    td.textContent = x${j}: ${tableau[i][j]};
+                } else if (j === numVariables + numConstraints + 2) {
+                    td.textContent = "ve: ";
+                } else {
+                    td.textContent = tableau[i][j];
+                }
+                if (j === findPivotColumnIndex(tableau)) {
+                    td.classList.add("pivot");
+                }
+                tr.appendChild(td);
+            }
+            table.appendChild(tr);
+        }
+
+        document.getElementById("tableauContainer").style.display = "block";
+    }
+
+    function performSimplex(tableau, numVariables, numConstraints) {
+        const stepList = document.getElementById("stepList");
+        while (!isOptimal(tableau)) {
+            const pivotColumnIndex = getPivotColumn(tableau, numVariables, numConstraints);
+            if (pivotColumnIndex === -1) {
+                document.getElementById("solutionMessage").textContent = "The problem is unbounded.";
+                document.getElementById("solution").style.display = "block";
+                return;
+            }
+            const pivotRowIndex = getPivotRow(tableau, numVariables, numConstraints, pivotColumnIndex);
+            updateTableau(tableau, numVariables, numConstraints, pivotRowIndex, pivotColumnIndex);
+            displayTableau(tableau, numVariables, numConstraints);
+            displayStep(stepList, tableau, numVariables, numConstraints, pivotRowIndex, pivotColumnIndex);
+        }
+
+        const solutionMessage = document.getElementById("solutionMessage");
+        solutionMessage.textContent = "Optimal solution found:";
+        solutionMessage.textContent += \nObjective Function Value (z): ${tableau[numConstraints + 1][numConstraints + numVariables + 2]};
+        for (let i = 1; i <= numVariables; i++) {
+            solutionMessage.textContent += \nx${i}: ${tableau[getBasicRowIndex(tableau, numConstraints) - 1][numConstraints + numVariables + 2]};
+        }
+        document.getElementById("solution").style.display = "block";
+    }
+
+    function isOptimal(tableau) {
+        const lastRow = tableau[tableau.length - 1];
+        for (let i = 1; i < lastRow.length - 1; i++) {
+            if (lastRow[i] < 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    function getPivotColumn(tableau, numVariables, numConstraints) {
+        const lastRow = tableau[tableau.length - 1];
+        let minIndex = -1;
+        for (let i = 1; i < lastRow.length - 1; i++) {
+            if (lastRow[i] < 0 && (minIndex === -1 || lastRow[i] < lastRow[minIndex])) {
+                minIndex = i;
+            }
+        }
+        return minIndex;
+    }
+
+    function findPivotColumnIndex(tableau) {
+        const pivotColumnIndex = getPivotColumn(tableau, numVariables, numConstraints);
+        return pivotColumnIndex + 1; // Adjust for 1-based indexing in the table
+    }
+
+    function getPivotRow(tableau, numVariables, numConstraints, pivotColumnIndex) {
+        let minRatio = Number.MAX_SAFE_INTEGER;
+        let minIndex = -1;
+        for (let i = 1; i < tableau.length - 1; i++) {
+            const ratio = tableau[i][tableau[i].length - 1] / tableau[i][pivotColumnIndex];
+            if (tableau[i][pivotColumnIndex] > 0 && ratio < minRatio) {
+                minRatio = ratio;
+                minIndex = i;
+            }
+        }
+        return minIndex;
+    }
+
+    function updateTableau(tableau, numVariables, numConstraints, pivotRowIndex, pivotColumnIndex) {
+        const pivotValue = tableau[pivotRowIndex][pivotColumnIndex];
+        for (let i = 1; i < tableau[pivotRowIndex].length; i++) {
+            tableau[pivotRowIndex][i] /= pivotValue;
+        }
+        for (let i = 1; i < tableau.length; i++) {
+            if (i !== pivotRowIndex) {
+                const factor = tableau[i][pivotColumnIndex];
+                for (let j = 1; j < tableau[i].length; j++) {
+                    tableau[i][j] -= factor * tableau[pivotRowIndex][j];
+                }
+            }
+        }
+    }
+
+    function getBasicRowIndex(tableau, numConstraints) {
+        for (let i = 1; i < tableau.length - 1; i++) {
+            if (tableau[i].slice(1, tableau[i].length - 1).every(val => val === 0) && tableau[i][tableau[i].length - 1] === 1) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    function displayStep(stepList, tableau, numVariables, numConstraints, pivotRowIndex, pivotColumnIndex) {
+        const step = document.createElement("li");
+        step.textContent = Pivot Column: x${pivotColumnIndex}\nPivot Row: Constraint ${pivotRowIndex}\n\nUpdated Tableau:\n;
+        for (let i = 1; i <= numConstraints + 1; i++) {
+            for (let j = 1; j <= numConstraints + numVariables + 2; j++) {
+                step.textContent += tableau[i][j] + " ";
+            }
+            step.textContent += "\n";
+        }
+        stepList.appendChild(step);
+        document.getElementById("steps").style.display = "block";
+    }
+</script>
+
+</body>
+</html>
